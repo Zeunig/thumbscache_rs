@@ -45,9 +45,11 @@ pub enum CacheType {
     CustomStream
 }
 
-/// These errors can appear if you're trying to read a file that isn't a thumbnail cache file
+/// These errors can appear if you're trying to read a file that isn't a thumbnail cache database or if you're trying to read an invalid file
 #[derive(Error, Debug)]
 pub enum ThumbsError {
+    #[error("Invalid file, check the path again")]
+    InvalidFile,
     #[error("Expected CMMM, got {0}. Are you sure you opened the right file?")]
     UnexpectedString(String),
     #[error("Invalid string. Are you sure you opened the right file?")]
@@ -94,15 +96,20 @@ impl std::fmt::Debug for Thumbscache {
 
 /// Opens the thumbscache database and reads it to a struct.
 /// Additional parsing is neccessary using the .read() function.
-pub fn open_thumbscache(file: String) -> Thumbscache {
+pub fn open_thumbscache(file: String) -> Result<Thumbscache, ThumbsError> {
     let mut bytes: Vec<u8> = Vec::new();
-    let _ = std::fs::OpenOptions::new().read(true).open(file).unwrap().read_to_end(&mut bytes).unwrap();
-    return Thumbscache {
-        stream: Cursor::new(bytes),
-        windows_version: None,
-        cache_entires: Vec::new(),
-        cache_type: None
+    if let Ok(mut opened_file) = std::fs::OpenOptions::new().read(true).open(file) {
+        opened_file.read_to_end(&mut bytes).unwrap();
+        return Ok(Thumbscache {
+            stream: Cursor::new(bytes),
+            windows_version: None,
+            cache_entires: Vec::new(),
+            cache_type: None
+        });
+    }else {
+        return Err(ThumbsError::InvalidFile);
     }
+    
 
 }
 
@@ -130,9 +137,6 @@ impl CacheEntry {
     pub fn write_to_file(&self, file_path: Option<&Path>) -> Result<(),Box<dyn Error>> {
         let mut file: File;
         if let Some(file_path) = file_path {
-            if !file_path.to_str().unwrap().contains(".bmp") {
-                
-            }
             file = OpenOptions::new().create(true).write(true).open(file_path)?;
         }else {
             file = OpenOptions::new().create(true).write(true).open(format!("./{}.bmp",self.identifier_string))?;
@@ -367,7 +371,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let mut a = open_thumbscache(String::from("C:\\Users\\z\\AppData\\Local\\Microsoft\\Windows\\Explorer\\thumbcache_16.db"));
+        let mut a = open_thumbscache(String::from("C:\\Users\\z\\AppData\\Local\\Microsoft\\Windows\\Explorer\\thumbcache_16.db")).unwrap();
         a.read().unwrap();
         println!("{:?}",a);
     }

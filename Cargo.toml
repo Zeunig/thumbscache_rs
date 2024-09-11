@@ -2,6 +2,12 @@
 name = "thumbscache"
 version = "1.0.0"
 edition = "2021"
+license = "MIT"
+keywords = ["thumbscache", "thumbnail"]
+categories = ["parsing", "parser-implementations"]
+description = "A simple Rust libary which allows you to parse the contents of a thumbscache database"
+repository = "https://github.com/Zeunig/thumbscache_rs/"
+readme = "README.md"
 
 [dependencies]
 thiserror = "1.0"
