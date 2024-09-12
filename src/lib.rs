@@ -1,13 +1,13 @@
 //! View the contents of the Windows thumbnail cache files
 //! 
-//! https://en.wikipedia.org/wiki/Windows_thumbnail_cache
+//! <https://en.wikipedia.org/wiki/Windows_thumbnail_cache>
 //! This library provides an easy-to-use function to read the contents of the thumbnail cache files and view the cache entries of it
 //! Supports Windows Vista and above
 //! TODO :
 //! - Data and header verification
 
 
-use std::{error::Error, fs::{File, OpenOptions}, io::{Cursor, Read, Write}, path::Path};
+use std::{fs::{File, OpenOptions}, io::{Cursor, Read, Write}};
 
 use thiserror::Error;
 
@@ -53,7 +53,9 @@ pub enum ThumbsError {
     #[error("Expected CMMM, got {0}. Are you sure you opened the right file?")]
     UnexpectedString(String),
     #[error("Invalid string. Are you sure you opened the right file?")]
-    InvalidCheckString
+    InvalidCheckString,
+    #[error("An error occurred while trying to write a cache entry into a file.")]
+    IoError(std::io::Error)
 }
 
 // Converts a slice into a slice with fixed length because some functions like to bitch about it.
@@ -96,6 +98,8 @@ impl std::fmt::Debug for Thumbscache {
 
 /// Opens the thumbscache database and reads it to a struct.
 /// Additional parsing is neccessary using the .read() function.
+/// 
+/// Returns an error if you specify an invalid file path
 pub fn open_thumbscache(file: String) -> Result<Thumbscache, ThumbsError> {
     let mut bytes: Vec<u8> = Vec::new();
     if let Ok(mut opened_file) = std::fs::OpenOptions::new().read(true).open(file) {
@@ -134,15 +138,26 @@ pub struct CacheEntry {
 impl CacheEntry {
     /// Writes the contents of the cache entry into a file.
     /// The file path defaults to the current directory unless stated otherwise.
-    pub fn write_to_file(&self, file_path: Option<&Path>) -> Result<(),Box<dyn Error>> {
+    pub fn write_to_file(&self, file_path: Option<String>) -> Result<(), ThumbsError> {
         let mut file: File;
         if let Some(file_path) = file_path {
-            file = OpenOptions::new().create(true).write(true).open(file_path)?;
+            if let Ok(opened_file) = OpenOptions::new().create(true).write(true).open(file_path) {
+                file = opened_file;
+            }else {
+                return Err(ThumbsError::IoError(std::io::ErrorKind::InvalidInput.into())); 
+            }
         }else {
-            file = OpenOptions::new().create(true).write(true).open(format!("./{}.bmp",self.identifier_string))?;
+            if let Ok(opened_file) = OpenOptions::new().create(true).write(true).open(format!("./{}.bmp",self.identifier_string)) {
+                file = opened_file;
+            }else {
+                return Err(ThumbsError::IoError(std::io::ErrorKind::InvalidInput.into()));   
+            }
         }
-        file.write_all(&self.data)?;
-        Ok(())
+        if let Ok(_) = file.write_all(&self.data) {
+            Ok(())
+        }else {
+            Err(ThumbsError::IoError(std::io::ErrorKind::InvalidData.into()))
+        }
     }
 } 
 
@@ -268,7 +283,6 @@ impl Thumbscache {
                                 identifier_string_vec.extend_from_slice(&self.stream.get_ref()[self.stream.position() as usize..self.stream.position() as usize+identifier_string_size as usize]);
                                 let identifier_string_vec_u16: Vec<u16> = identifier_string_vec.chunks_exact(2).into_iter().map(|a| u16::from_ne_bytes([a[0], a[1]])).collect();
                                 let identifier_string: String = String::from_utf16_lossy(identifier_string_vec_u16.as_slice());
-                                // elskippeljük a paddinget a gecibe
                                 self.stream.set_position(self.stream.position() + padding_size as u64);
                                 let mut data = vec![0u8; data_size.try_into().unwrap()];
                                 self.stream.read_exact(&mut data).unwrap();
@@ -299,7 +313,6 @@ impl Thumbscache {
                                 let _ = self.stream.read_exact(&mut identifier_string_vec);
                                 let identifier_string_vec_u16: Vec<u16> = identifier_string_vec.chunks_exact(2).into_iter().map(|a| u16::from_ne_bytes([a[0], a[1]])).collect();
                                 let identifier_string: String = String::from_utf16_lossy(identifier_string_vec_u16.as_slice());
-                                // elskippeljük a paddinget a gecibe
                                 self.stream.set_position(self.stream.position() + padding_size as u64);
                                 let mut data = vec![0u8; data_size.try_into().unwrap()];
                                 self.stream.read_exact(&mut data).unwrap();
@@ -331,7 +344,6 @@ impl Thumbscache {
                                 let _ = self.stream.read_exact(&mut identifier_string_vec);
                                 let identifier_string_vec_u16: Vec<u16> = identifier_string_vec.chunks_exact(2).into_iter().map(|a| u16::from_ne_bytes([a[0], a[1]])).collect();
                                 let identifier_string: String = String::from_utf16_lossy(identifier_string_vec_u16.as_slice());
-                                // elskippeljük a paddinget a gecibe
                                 self.stream.set_position(self.stream.position() + padding_size as u64);
                                 let mut data = vec![0u8; data_size.try_into().unwrap()];
                                 self.stream.read_exact(&mut data).unwrap();
