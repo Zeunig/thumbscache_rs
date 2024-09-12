@@ -54,7 +54,7 @@ pub enum ThumbsError {
     UnexpectedString(String),
     #[error("Invalid string. Are you sure you opened the right file?")]
     InvalidCheckString,
-    #[error("An error occurred while trying to write a cache entry into a file.")]
+    #[error("An error occurred while trying to write a cache entry into a file or while trying to fill up a buffer while parsing.")]
     IoError(std::io::Error)
 }
 
@@ -75,9 +75,8 @@ fn clone_into_array<A, T>(slice: &[T]) -> A
 /// 
 /// ```
 /// use thumbscache::open_thumbscache;
-/// use std::path::Path;
 /// fn main() {
-///     let mut a = open_thumbscache(Path::new("C:\\Users\\z\\AppData\\Local\\Microsoft\\Windows\\Explorer\\thumbcache_16.db"));
+///     let mut a = open_thumbscache(String::from("C:\\Users\\z\\AppData\\Local\\Microsoft\\Windows\\Explorer\\thumbcache_16.db"));
 /// }
 /// ```
 /// 
@@ -103,7 +102,7 @@ impl std::fmt::Debug for Thumbscache {
 pub fn open_thumbscache(file: String) -> Result<Thumbscache, ThumbsError> {
     let mut bytes: Vec<u8> = Vec::new();
     if let Ok(mut opened_file) = std::fs::OpenOptions::new().read(true).open(file) {
-        opened_file.read_to_end(&mut bytes).unwrap();
+        opened_file.read_to_end(&mut bytes).map_err(|x| {ThumbsError::IoError(x)})?;
         return Ok(Thumbscache {
             stream: Cursor::new(bytes),
             windows_version: None,
@@ -166,7 +165,7 @@ impl Thumbscache {
     /// Reads all the cache entries and stores them into a list
     pub fn read(&mut self) -> Result<u32, ThumbsError> {
         let mut read_bytes: [u8; 32] = [0; 32];
-        self.stream.read_exact(&mut read_bytes).unwrap();
+        self.stream.read_exact(&mut read_bytes).map_err(|x| {ThumbsError::IoError(x)})?;
         if let Ok(check_string) = std::str::from_utf8(&read_bytes[0..4]) {
             if check_string != "CMMM" {
                 return Err(ThumbsError::UnexpectedString(check_string.to_string()));
@@ -285,7 +284,7 @@ impl Thumbscache {
                                 let identifier_string: String = String::from_utf16_lossy(identifier_string_vec_u16.as_slice());
                                 self.stream.set_position(self.stream.position() + padding_size as u64);
                                 let mut data = vec![0u8; data_size.try_into().unwrap()];
-                                self.stream.read_exact(&mut data).unwrap();
+                                self.stream.read_exact(&mut data).map_err(|x| {ThumbsError::IoError(x)})?;
                                 // If we didn't read enough data then we skip to the next cache entry
                                 self.stream.set_position(self.stream.position() + (size-(56+data_size+identifier_string_size+padding_size)) as u64);
                                 let cache_entry = CacheEntry {
@@ -315,7 +314,7 @@ impl Thumbscache {
                                 let identifier_string: String = String::from_utf16_lossy(identifier_string_vec_u16.as_slice());
                                 self.stream.set_position(self.stream.position() + padding_size as u64);
                                 let mut data = vec![0u8; data_size.try_into().unwrap()];
-                                self.stream.read_exact(&mut data).unwrap();
+                                self.stream.read_exact(&mut data).map_err(|x| {ThumbsError::IoError(x)})?;
                                 // If we didn't read enough data then we skip to the next cache entry
                                 self.stream.set_position(self.stream.position() + (size-(56+data_size+identifier_string_size+padding_size)) as u64);
                                 let cache_entry = CacheEntry {
@@ -346,7 +345,7 @@ impl Thumbscache {
                                 let identifier_string: String = String::from_utf16_lossy(identifier_string_vec_u16.as_slice());
                                 self.stream.set_position(self.stream.position() + padding_size as u64);
                                 let mut data = vec![0u8; data_size.try_into().unwrap()];
-                                self.stream.read_exact(&mut data).unwrap();
+                                self.stream.read_exact(&mut data).map_err(|x| {ThumbsError::IoError(x)})?;
                                 // If we didn't read enough data then we skip to the next cache entry
                                 self.stream.set_position(self.stream.position() + (size-(56+data_size+identifier_string_size+padding_size)) as u64);
                                 let cache_entry = CacheEntry {
